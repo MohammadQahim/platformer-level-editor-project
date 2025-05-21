@@ -27,7 +27,7 @@ private:
         // TODO
     };
 
-    enum class TileType
+    enum TileType
     {
         Coin     = '*',
         Enemy    = '&',
@@ -43,12 +43,12 @@ private:
     QStack<TileAction> undoStack;
 
     /*
-    QTableWidget *level;
-            OR
     QGraphicsGridLayout *level;
     */
 
-    QPushButton* createButton(const QIcon &icon, std::function<void()> action);
+    QPushButton* createButton(const QIcon &icon, TileType tileType, QHBoxLayout*);
+    QTableWidget *level = nullptr;
+    const float iconSize = 24.0f;
 };
 
 #endif // MAIN_WINDOW_H
