@@ -21,10 +21,14 @@ private:
     void resizeLevel();
 
     void exportToFile();
+    void onUndoClicked();
+    bool eventFilter(QObject* obj, QEvent* event);
 
-    struct TileAction
-    {
-        // TODO
+    struct TileAction {
+        int row;
+        int col;
+        QIcon previousIcon;
+        char previousData;
     };
 
     enum TileType
@@ -47,6 +51,9 @@ private:
     */
 
     QPushButton* createButton(const QIcon &icon, TileType tileType, QHBoxLayout*);
+    QPushButton* undoButton;
+    QPushButton* clearButton;
+    QPushButton* resizeButton;
     QTableWidget *level = nullptr;
     const float iconSize = 24.0f;
 };

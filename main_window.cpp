@@ -1,3 +1,5 @@
+#include <QKeyEvent>
+#include <QApplication>
 #include "main_window.h"
 #include "utilities.h"
 #include "QtWidgets"
@@ -35,6 +37,7 @@ MainWindow::MainWindow(QWidget *parent)
 
     connect(level, &QTableWidget::cellClicked, this, &MainWindow::onTileClicked);
 
+
     mainLayout->addWidget(level);
 
     QHBoxLayout* buttonLayout = new QHBoxLayout();
@@ -47,8 +50,21 @@ MainWindow::MainWindow(QWidget *parent)
     QPushButton* enemyButton = createButton(QIcon("data/sprites/enemy.png"), Enemy, buttonLayout);
     QPushButton* spikesButton = createButton(QIcon("data/sprites/spikes.png"), Spikes, buttonLayout);
     QPushButton* exitButton = createButton(QIcon("data/sprites/exit.png"), Exit, buttonLayout);
+    undoButton = new QPushButton("Undo");
+    connect(undoButton, &QPushButton::clicked, this, &MainWindow::onUndoClicked);
+
+    clearButton = new QPushButton("Clear");
+    connect(clearButton, &QPushButton::clicked, this, &MainWindow::clearLevel);
+    buttonLayout->addWidget(clearButton);
+
+    resizeButton = new QPushButton("Resize");
+    connect(resizeButton, &QPushButton::clicked, this, &MainWindow::resizeLevel);
+    buttonLayout->addWidget(resizeButton);
 
     mainLayout->addLayout(buttonLayout);
+    buttonLayout->addWidget(undoButton);
+
+    qApp->installEventFilter(this);
 
     centralWidget->show();
 }
@@ -58,7 +74,10 @@ MainWindow::~MainWindow() { }
 
 void MainWindow::keyPressEvent(QKeyEvent *event)
 {
-    // TODO
+    if (event->modifiers() & Qt::ControlModifier && event->key() == Qt::Key_Z) {
+        undoTilePlacement();
+        return;
+    }
 
     QMainWindow::keyPressEvent(event);
 }
@@ -85,6 +104,13 @@ void MainWindow::onTileClicked(int row, int column)
         item = new QTableWidgetItem();
         level->setItem(row, column, item);
     }
+    // block to support undo
+    TileAction action;
+    action.row = row;
+    action.col = column;
+    action.previousIcon = item->icon();
+    action.previousData = item->data(Qt::UserRole).toChar().toLatin1();
+    undoStack.push(action);
 
     QIcon icon;
 
@@ -99,8 +125,8 @@ void MainWindow::onTileClicked(int row, int column)
     }
 
     item->setIcon(icon);
-    char data = '-';
 
+    char data = '-';
     switch (selectedTile) {
         case Coin: data = '*'; break;
         case Enemy: data = '&'; break;
@@ -117,10 +143,32 @@ void MainWindow::onTileClicked(int row, int column)
 void MainWindow::undoTilePlacement()
 {
     if (undoStack.isEmpty()) return;
+
     TileAction action = undoStack.pop();
 
-    // TODO
+    QTableWidgetItem* item = level->item(action.row, action.col);
+    if (!item) {
+        item = new QTableWidgetItem();
+        level->setItem(action.row, action.col, item);
+    }
+
+    item->setIcon(action.previousIcon);
+    item->setData(Qt::UserRole, action.previousData);
 }
+
+bool MainWindow::eventFilter(QObject* obj, QEvent* event) // ADDED for ctrl Z undo woks
+{
+    if (event->type() == QEvent::KeyPress) {
+        QKeyEvent* keyEvent = static_cast<QKeyEvent*>(event);
+        if (keyEvent->modifiers() & Qt::ControlModifier && keyEvent->key() == Qt::Key_Z) {
+            undoTilePlacement();
+            return true;
+        }
+    }
+    return QMainWindow::eventFilter(obj, event);
+}
+
+
 
 QPushButton* MainWindow::createButton(const QIcon &icon, TileType tileType, QHBoxLayout* layout) {
     QPushButton *button = new QPushButton();
@@ -135,16 +183,48 @@ QPushButton* MainWindow::createButton(const QIcon &icon, TileType tileType, QHBo
 
 void MainWindow::clearLevel()
 {
-    // TODO
+    undoStack.clear();
+    for (int row = 0; row < level->rowCount(); ++row) {
+        for (int col = 0; col < level->columnCount(); ++col) {
+            QTableWidgetItem* item = level->item(row, col);
+            if (!item) {
+                item = new QTableWidgetItem();
+                level->setItem(row, col, item);
+            }
+            item->setIcon(QIcon());
+            item->setData(Qt::UserRole, '-');
+        }
+    }
 }
 
 void MainWindow::resizeLevel()
 {
-    QDialog resizeDialog(this);
-    // TODO
-    if (resizeDialog.exec() == QDialog::Accepted) {
-        // TODO
+    bool ok;
+    int rows = QInputDialog::getInt(this, "Resize Level", "Enter number of rows:", level->rowCount(), 1, 100, 1, &ok);
+    if (!ok) return;
+
+    int cols = QInputDialog::getInt(this, "Resize Level", "Enter number of columns:", level->columnCount(), 1, 100, 1, &ok);
+    if (!ok) return;
+
+    level->setRowCount(rows);
+    level->setColumnCount(cols);
+}
+
+void MainWindow::onUndoClicked()
+{
+    if (undoStack.isEmpty())
+        return;
+
+    TileAction action = undoStack.pop(); // take out the last action
+
+    QTableWidgetItem* item = level->item(action.row, action.col);
+    if (!item) {
+        item = new QTableWidgetItem();
+        level->setItem(action.row, action.col, item);
     }
+
+    item->setIcon(action.previousIcon);
+    item->setData(Qt::UserRole, action.previousData);
 }
 
 void MainWindow::exportToFile()
