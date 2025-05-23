@@ -61,6 +61,10 @@ MainWindow::MainWindow(QWidget *parent)
     connect(resizeButton, &QPushButton::clicked, this, &MainWindow::resizeLevel);
     buttonLayout->addWidget(resizeButton);
 
+    QPushButton* exportButton = new QPushButton("Export");
+    connect(exportButton, &QPushButton::clicked, this, &MainWindow::exportToFile);
+    buttonLayout->addWidget(exportButton);
+
     mainLayout->addLayout(buttonLayout);
     buttonLayout->addWidget(undoButton);
 
@@ -168,8 +172,6 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event) // ADDED for ctrl Z un
     return QMainWindow::eventFilter(obj, event);
 }
 
-
-
 QPushButton* MainWindow::createButton(const QIcon &icon, TileType tileType, QHBoxLayout* layout) {
     QPushButton *button = new QPushButton();
     button->setFixedSize(32, 32);
@@ -236,17 +238,45 @@ void MainWindow::exportToFile()
         "RLL Files (*.rll);;All Files (*)"
     );
 
+    if (filePath.isEmpty())
+        return;
+
+    int rows = level->rowCount();
+    int cols = level->columnCount();
+
+    std::vector<char> data(rows * cols, '-');
+
+    for (int row = 0; row < rows; ++row) {
+        for (int col = 0; col < cols; ++col) {
+            QTableWidgetItem* item = level->item(row, col);
+            if (item) {
+                char tile = item->data(Qt::UserRole).toChar().toLatin1();
+                data[row * cols + col] = tile;
+            }
+        }
+    }
+
+    QString rleEncoded;
+    int count = 1;
+    for (size_t i = 1; i <= data.size(); ++i) {
+        if (i < data.size() && data[i] == data[i - 1]) {
+            ++count;
+        } else {
+            rleEncoded += QString::number(count) + data[i - 1];
+            count = 1;
+        }
+    }
+
+    QString encryptedOutput;
+    encrypt(rows, cols, rleEncoded.toUtf8().constData(), encryptedOutput);
+
     QFile file(filePath);
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
+        QMessageBox::warning(this, "Error", "Failed to save the file.");
+        return;
+    }
+
     QTextStream out(&file);
-
-    // TODO
-
-    /* Snippets:
-     * std::vector<char> data(rows * cols, '-');
-     * char tile = item->data(Qt::UserRole).toChar().toLatin1();
-     * encrypt(rows, cols, data.data(), output);
-     * out << output;
-     */
-
+    out << encryptedOutput;
     file.close();
 }
